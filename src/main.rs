@@ -4,9 +4,12 @@ mod chunk_type;
 mod commands;
 mod png;
 
-pub type Error = Box<dyn std::error::Error>;
-pub type Result<T> = std::result::Result<T, Error>;
+mod types;
 
-fn main() -> Result<()> {
+fn main() -> types::Result<()> {
     todo!()
 }
+
+// Next up:
+// Project: https://picklenerd.github.io/pngme_book/chapter_2.html
+// Spec bookmark: http://www.libpng.org/pub/png/spec/1.2/PNG-Structure.html
