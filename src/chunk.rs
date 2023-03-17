@@ -114,7 +114,7 @@ impl Display for Chunk {
         let length = self.length();
         let type_ = self.chunk_type();
         let crc = self.crc();
-        writeln!(
+        write!(
             f, 
             "Chunk {{Length: {}, Type: {}, Crc: {}}}",
             length, type_, crc

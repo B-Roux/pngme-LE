@@ -139,7 +139,7 @@ impl Display for Png {
             writeln!(f, "    {}: {}", i, chunk)?;
         }
         writeln!(f, "  ]")?;
-        writeln!(f, "}}",)?;
+        write!(f, "}}",)?;
         Ok(())
     }
 }
