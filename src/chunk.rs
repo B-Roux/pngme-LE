@@ -1,17 +1,18 @@
 use crate::{
     chunk_type::ChunkType,
-    types::{error_from, Error, Result},
+    types::{assert_or_err, error_from, Error, Result},
 };
-use crc;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 // fixed length field widths
-const LENGTH_LEN: usize = 4;
-const TYPE_LEN: usize = 4;
-const CRC_LEN: usize = 4;
+pub const LENGTH_WIDTH: usize = 4;
+pub const TYPE_WIDTH: usize = 4;
+pub const CRC_WIDTH: usize = 4;
+pub const REQ_FIELDS_WIDTH: usize = LENGTH_WIDTH + TYPE_WIDTH + CRC_WIDTH;
 
 /// Stores a PNG chunk
-struct Chunk {
+#[derive(Debug)]
+pub struct Chunk {
     chunk_type: ChunkType,
     data: Vec<u8>,
 }
@@ -41,14 +42,14 @@ impl Chunk {
     pub fn crc(&self) -> u32 {
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 
-        let mut bytes = Vec::with_capacity((self.length() as usize) + LENGTH_LEN);
-        bytes.extend(self.chunk_type.bytes()); // 4 bytes
-        bytes.extend(self.data()); // self.length() bytes
+        let mut bytes = Vec::with_capacity((self.length() as usize) + TYPE_WIDTH);
+        bytes.extend(self.chunk_type.bytes());
+        bytes.extend(self.data());
 
         crc.checksum(&bytes)
     }
 
-    /// try to read data as UTF8
+    /// Try to read data as UTF8
     pub fn data_as_string(&self) -> Result<String> {
         match String::from_utf8(self.data.clone()) {
             Ok(s) => Ok(s),
@@ -56,10 +57,10 @@ impl Chunk {
         }
     }
 
-    /// get this entire chunk as a vector of raw bytes
+    /// Get this entire chunk as a vector of raw bytes
     pub fn as_bytes(&self) -> Vec<u8> {
         // I could use iterators here, but I like this better - it feels simpler to me
-        let mut bytes = Vec::with_capacity(LENGTH_LEN + TYPE_LEN + (self.length() as usize) + CRC_LEN);
+        let mut bytes = Vec::with_capacity(REQ_FIELDS_WIDTH + (self.length() as usize));
         bytes.extend(self.length().to_be_bytes());
         bytes.extend(self.chunk_type.bytes());
         bytes.extend(self.data());
@@ -70,25 +71,25 @@ impl Chunk {
 
 impl TryFrom<&[u8]> for Chunk {
     type Error = Error;
-    /// Gives the ability to construct a chunk from raw bytes
+    /// Gives the ability to construct a Chunk from raw bytes
     fn try_from(value: &[u8]) -> Result<Self> {
         let length_begin: usize = 0;
-        let type_begin: usize = length_begin + LENGTH_LEN;
-        let data_begin: usize = type_begin + TYPE_LEN;
+        let type_begin: usize = length_begin + LENGTH_WIDTH;
+        let data_begin: usize = type_begin + TYPE_WIDTH;
 
         // read the length
-        let chunk_length = if value.len() >= LENGTH_LEN + TYPE_LEN + CRC_LEN {
-            u32::from_be_bytes(value[..4].try_into()?)
-        } else {
-            return Err(error_from("invalid chunk data (incomplete)"));
-        };
+        assert_or_err(
+            value.len() >= REQ_FIELDS_WIDTH, 
+            "invalid chunk data (incomplete)",
+        )?;
+        let chunk_length = u32::from_be_bytes(value[length_begin..type_begin].try_into()?);
 
         // make sure the slice length matches the indicated length
-        let crc_begin = if value.len() == LENGTH_LEN + TYPE_LEN + (chunk_length as usize) + CRC_LEN {
-             data_begin + (chunk_length as usize)
-        } else {
-            return Err(error_from("invalid chunk data (invalid length)"));
-        };
+        assert_or_err(
+            value.len() == REQ_FIELDS_WIDTH + (chunk_length as usize),
+            "invalid chunk data (invalid length)",
+        )?;
+        let crc_begin = data_begin + (chunk_length as usize);
 
         // read remaining fields
         let chunk_type_bytes: [u8; 4] = value[type_begin..data_begin].try_into()?;
@@ -98,9 +99,10 @@ impl TryFrom<&[u8]> for Chunk {
         let chunk_crc = u32::from_be_bytes(chunk_crc_bytes);
         // validate & return
         let unchecked_chunk = Chunk::new(chunk_type, chunk_data);
-        if unchecked_chunk.crc() != chunk_crc {
-            return Err(error_from("checksum does not match data"));
-        }
+        assert_or_err(
+            unchecked_chunk.crc() == chunk_crc, 
+            "checksum does not match data",
+        )?;
         Ok(unchecked_chunk)
     }
 }
@@ -108,13 +110,15 @@ impl TryFrom<&[u8]> for Chunk {
 impl Display for Chunk {
     /// Gives the ability to format ChunkType as a string
     /// and Enables ToString
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        writeln!(f, "Chunk {{",)?;
-        writeln!(f, "  Length: {}", self.length())?;
-        writeln!(f, "  Type: {}", self.chunk_type())?;
-        writeln!(f, "  Data: {} bytes", self.data().len())?;
-        writeln!(f, "  Crc: {}", self.crc())?;
-        writeln!(f, "}}",)?;
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let length = self.length();
+        let type_ = self.chunk_type();
+        let crc = self.crc();
+        writeln!(
+            f, 
+            "Chunk {{Length: {}, Type: {}, Crc: {}}}",
+            length, type_, crc
+        )?;
         Ok(())
     }
 }

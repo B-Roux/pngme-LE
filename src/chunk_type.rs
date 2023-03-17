@@ -1,17 +1,27 @@
-use crate::types::{Result, Error, error_from};
+use crate::types::{error_from, Error, Result};
 use std::{
-    fmt::{Display, Formatter},
+    fmt::{Display, Formatter, Result as FmtResult},
     str::FromStr,
 };
 
 /// Represents a PNG chunk type code
 #[derive(Eq, PartialEq, Debug)]
-pub struct ChunkType([u8; 4]);
+pub struct ChunkType {
+    ancillary: u8,
+    private: u8,
+    reserved: u8,
+    safe_to_copy: u8,
+}
 
 impl ChunkType {
     /// Returns the raw chunk type bytes
     pub fn bytes(&self) -> [u8; 4] {
-        self.0
+        [
+            self.ancillary,
+            self.private,
+            self.reserved,
+            self.safe_to_copy,
+        ]
     }
 
     /// Tests chunk type validity
@@ -21,22 +31,22 @@ impl ChunkType {
 
     /// Tests chunk type ancillary bit (byte 0 bit 5)
     pub fn is_critical(&self) -> bool {
-        self.0[0] & 32u8 == 0u8
+        self.ancillary & 32u8 == 0u8
     }
 
     /// Tests chunk type private bit (byte 1 bit 5)
     pub fn is_public(&self) -> bool {
-        self.0[1] & 32u8 == 0u8
+        self.private & 32u8 == 0u8
     }
 
     /// Tests chunk type reserved bit validity (byte 2 bit 5)
     pub fn is_reserved_bit_valid(&self) -> bool {
-        self.0[2] & 32u8 == 0u8
+        self.reserved & 32u8 == 0u8
     }
 
     /// Tests chunk type copy bit (byte 3 bit 5)
     pub fn is_safe_to_copy(&self) -> bool {
-        self.0[3] & 32u8 != 0u8
+        self.safe_to_copy & 32u8 != 0u8
     }
 }
 
@@ -52,7 +62,12 @@ impl TryFrom<[u8; 4]> for ChunkType {
                 _ => return Err(error_from(&format!("byte {} is out of range", i))),
             }
         }
-        Ok(ChunkType(value))
+        Ok(ChunkType {
+            ancillary: value[0],
+            private: value[1],
+            reserved: value[2],
+            safe_to_copy: value[3],
+        })
     }
 }
 
@@ -73,8 +88,8 @@ impl FromStr for ChunkType {
 impl Display for ChunkType {
     /// Gives the ability to format ChunkType as its ASCII equivalent
     /// and Enables ToString
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", String::from_utf8_lossy(&self.0))
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", String::from_utf8_lossy(&self.bytes()))
     }
 }
 
