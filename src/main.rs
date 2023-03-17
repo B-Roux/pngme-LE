@@ -1,10 +1,10 @@
-mod args;
-mod chunk;
-mod chunk_type;
-mod commands;
-mod png;
-
 mod types;
+mod chunk_type;
+mod chunk;
+//mod args;
+//mod commands;
+//mod png;
+
 
 fn main() -> types::Result<()> {
     todo!()

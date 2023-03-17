@@ -1,4 +1,4 @@
-use super::types;
+use crate::types::{Result, Error, error_from};
 use std::{
     fmt::{Display, Formatter},
     str::FromStr,
@@ -6,20 +6,50 @@ use std::{
 
 /// Represents a PNG chunk type code
 #[derive(Eq, PartialEq, Debug)]
-struct ChunkType([u8; 4]);
+pub struct ChunkType([u8; 4]);
+
+impl ChunkType {
+    /// Returns the raw chunk type bytes
+    pub fn bytes(&self) -> [u8; 4] {
+        self.0
+    }
+
+    /// Tests chunk type validity
+    pub fn is_valid(&self) -> bool {
+        self.is_reserved_bit_valid()
+    }
+
+    /// Tests chunk type ancillary bit (byte 0 bit 5)
+    pub fn is_critical(&self) -> bool {
+        self.0[0] & 32u8 == 0u8
+    }
+
+    /// Tests chunk type private bit (byte 1 bit 5)
+    pub fn is_public(&self) -> bool {
+        self.0[1] & 32u8 == 0u8
+    }
+
+    /// Tests chunk type reserved bit validity (byte 2 bit 5)
+    pub fn is_reserved_bit_valid(&self) -> bool {
+        self.0[2] & 32u8 == 0u8
+    }
+
+    /// Tests chunk type copy bit (byte 3 bit 5)
+    pub fn is_safe_to_copy(&self) -> bool {
+        self.0[3] & 32u8 != 0u8
+    }
+}
 
 impl TryFrom<[u8; 4]> for ChunkType {
-    type Error = types::Error;
+    type Error = Error;
 
     /// Gives the ability to construct a ChunkType from a [u8; 4]
-    fn try_from(value: [u8; 4]) -> types::Result<Self> {
+    fn try_from(value: [u8; 4]) -> Result<Self> {
         for (i, byte) in value.iter().enumerate() {
             match byte {
                 b'a'..=b'z' => {}
                 b'A'..=b'Z' => {}
-                _ => return Err(
-                    types::error_from(&format!("byte {} is out of range", i))
-                ),
+                _ => return Err(error_from(&format!("byte {} is out of range", i))),
             }
         }
         Ok(ChunkType(value))
@@ -27,14 +57,12 @@ impl TryFrom<[u8; 4]> for ChunkType {
 }
 
 impl FromStr for ChunkType {
-    type Err = types::Error;
+    type Err = Error;
 
     /// Gives the ability to  construct a ChunkType from a &str
-    fn from_str(value: &str) -> types::Result<Self> {
+    fn from_str(value: &str) -> Result<Self> {
         if value.len() != 4 {
-            Err(
-                types::error_from("`value` must be exactly 4 bytes long",)
-            )
+            Err(error_from("`value` must be exactly 4 bytes long"))
         } else {
             let bytes: [u8; 4] = value.as_bytes().try_into()?;
             ChunkType::try_from(bytes)
@@ -44,41 +72,9 @@ impl FromStr for ChunkType {
 
 impl Display for ChunkType {
     /// Gives the ability to format ChunkType as its ASCII equivalent
-    /// Enables ToString
+    /// and Enables ToString
     fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", std::str::from_utf8(&self.0).unwrap())
-    }
-}
-
-impl ChunkType {
-    /// Returns the raw chunk type bytes
-    fn bytes(&self) -> [u8; 4] {
-        self.0
-    }
-
-    /// Tests chunk type validity
-    fn is_valid(&self) -> bool {
-        self.is_reserved_bit_valid()
-    }
-
-    /// Tests chunk type ancillary bit (byte 0 bit 5)
-    fn is_critical(&self) -> bool {
-        self.0[0] & 32u8 == 0u8
-    }
-
-    /// Tests chunk type private bit (byte 1 bit 5)
-    fn is_public(&self) -> bool {
-        self.0[1] & 32u8 == 0u8
-    }
-
-    /// Tests chunk type reserved bit validity (byte 2 bit 5)
-    fn is_reserved_bit_valid(&self) -> bool {
-        self.0[2] & 32u8 == 0u8
-    }
-
-    /// Tests chunk type copy bit (byte 3 bit 5)
-    fn is_safe_to_copy(&self) -> bool {
-        self.0[3] & 32u8 != 0u8
+        write!(f, "{}", String::from_utf8_lossy(&self.0))
     }
 }
 
